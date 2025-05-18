@@ -1,5 +1,4 @@
 package algorithm;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.logging.log4j.LogManager;
@@ -8,12 +7,17 @@ import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
-import java.util.Arrays;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import java.util.Map;
+
+
+
 
 /**
  * Implementa el algoritmo de análisis de alcanzabilidad.
@@ -112,7 +116,7 @@ class ReachabilityAnalyzer {
 
         // Finalizar el thread pool
         threadPool.shutdown();
-        threadPool.awaitTermination(10, TimeUnit.SECONDS);
+        //threadPool.awaitTermination(10, TimeUnit.SECONDS);
 
         logger.info("Final number of states in reachability tree: {}", reachabilityTree.size());
     }
@@ -139,16 +143,7 @@ class ReachabilityAnalyzer {
         public void run() {
             try {
                 while (!Thread.currentThread().isInterrupted()) {
-                    FiringTask task = firingQueue.poll(100, TimeUnit.MILLISECONDS);
-
-                    if (task == null) {
-                        // Si no hay tareas y activeTaskCount es 0, terminar
-                        if (activeTaskCount.get() == 0) {
-                            break;
-                        }
-                        continue;
-                    }
-
+                    FiringTask task = firingQueue.take();
                     processTask(task);
                 }
             } catch (InterruptedException e) {
@@ -165,11 +160,6 @@ class ReachabilityAnalyzer {
 
                 // Obtener el nodo padre
                 Node parentNode = reachabilityTree.get(parentMarkingId);
-                if (parentNode == null) {
-                    // Esto no debería suceder, pero por si acaso
-                    activeTaskCount.decrementAndGet();
-                    return;
-                }
 
                 // Obtener el marcado de la subred
                 int[] subnetMarking = parentNode.getSubnetMarkings().get(subnetId);
@@ -203,54 +193,49 @@ class ReachabilityAnalyzer {
                         visitedMarkingsLock.readLock().unlock();
                     }
 
-                    if (!alreadyVisited) {
+                    if (alreadyVisited) {
+                        reachabilityTree.remove(childMarkingId);
+                    } else {
                         visitedMarkingsLock.writeLock().lock();
-                        try {
-                            // Volver a verificar con el write lock
-                            if (!visitedMarkings.contains(serializedMarking)) {
-                                visitedMarkings.add(serializedMarking);
+                        // Volver a verificar con el write lock
+                        if (visitedMarkings.contains(serializedMarking)) {
+                            visitedMarkingsLock.writeLock().unlock();
+                            reachabilityTree.remove(childMarkingId);
+                        } else {
+                            visitedMarkings.add(serializedMarking);
+                            visitedMarkingsLock.writeLock().unlock();
 
-                                // Obtener transiciones habilitadas en el nuevo marcado
-                                List<Integer> enabledTransitions = petriNet.getEnabledTransitions(globalMarking);
+                            // Obtener transiciones habilitadas en el nuevo marcado
+                            List<Integer> enabledTransitions = petriNet.getEnabledTransitions(globalMarking);
 
-                                // Encolar nuevas tareas
-                                for (int newTransIndex : enabledTransitions) {
-                                    List<Subnet> involvedSubnets = petriNet.getSubnetsContainingTransition(newTransIndex);
+                            // Encolar nuevas tareas
+                            for (int newTransIndex : enabledTransitions) {
+                                List<Subnet> involvedSubnets = petriNet.getSubnetsContainingTransition(newTransIndex);
 
-                                    // Crear el nodo para el nuevo marcado
-                                    String newChildMarkingId = childMarkingId + "_t" + newTransIndex;
-                                    Map<Integer, int[]> newChildSubnetMarkings = new HashMap<>();
-                                    for (Subnet s : petriNet.getSubnets()) {
-                                        newChildSubnetMarkings.put(s.getId(), s.extractSubnetMarking(globalMarking));
-                                    }
+                                // Crear el nodo para el nuevo marcado
+                                String newChildMarkingId = childMarkingId + "_t" + newTransIndex;
+                                Map<Integer, int[]> newChildSubnetMarkings = new HashMap<>();
+                                for (Subnet s : petriNet.getSubnets()) {
+                                    newChildSubnetMarkings.put(s.getId(), s.extractSubnetMarking(globalMarking));
+                                }
 
-                                    Node newChildNode = new Node(newChildMarkingId, newChildSubnetMarkings, involvedSubnets.size());
-                                    reachabilityTree.put(newChildMarkingId, newChildNode);
+                                Node newChildNode = new Node(newChildMarkingId, newChildSubnetMarkings, involvedSubnets.size());
+                                reachabilityTree.put(newChildMarkingId, newChildNode);
 
-                                    // Crear y encolar las tareas de disparo
-                                    for (Subnet s : involvedSubnets) {
-                                        FiringTask newTask = new FiringTask(childMarkingId, newTransIndex, s);
-                                        firingQueue.add(newTask);
-                                        activeTaskCount.incrementAndGet();
-                                    }
+                                // Crear y encolar las tareas de disparo
+                                for (Subnet s : involvedSubnets) {
+                                    FiringTask newTask = new FiringTask(childMarkingId, newTransIndex, s);
+                                    firingQueue.add(newTask);
+                                    activeTaskCount.incrementAndGet();
                                 }
                             }
-                            else {
-                                reachabilityTree.remove(childMarkingId);
-                            }
-                        } finally {
-                            visitedMarkingsLock.writeLock().unlock();
                         }
-                    } else {
-                        reachabilityTree.remove(childMarkingId);
                     }
                 }
-
-                // Decrementar el contador de tareas activas
-                activeTaskCount.decrementAndGet();
-
             } catch (Exception e) {
                 logger.error("Error processing firing task: {}", e.getMessage());
+                activeTaskCount.decrementAndGet();
+            } finally {
                 activeTaskCount.decrementAndGet();
             }
         }
