@@ -1,0 +1,85 @@
+sequenceDiagram
+    participant Main as Main Thread
+    participant Pool as ThreadPool
+    participant Worker1 as Worker Thread 1
+    participant Worker2 as Worker Thread 2
+    participant Queue as firingQueue
+    participant Tree as reachabilityTree
+    participant Visited as visitedMarkings
+
+    Note over Main: Initialize analyzer
+
+    Main->>Tree: Add initial marking (m0)
+    Main->>Visited: Mark initial marking as visited
+    Main->>+Queue: Enqueue initial transition tasks
+    
+    Main->>+Pool: Create worker threads
+    Pool->>+Worker1: Create & start
+    Pool->>+Worker2: Create & start
+    
+    par Workers process tasks in parallel
+        loop Until no more tasks
+            Worker1->>Queue: Poll for task
+            Queue-->>Worker1: Return FiringTask
+            
+            Worker1->>Tree: Get parent node
+            Tree-->>Worker1: Return Node
+            
+            Worker1->>Worker1: Fire transition in subnet
+            
+            Worker1->>Tree: Update child node's subnet marking
+            Worker1->>Worker1: Decrement completion counter
+            
+            alt Subnet processing complete
+                Worker1->>Visited: Check if marking exists
+                
+                alt New marking
+                    Worker1->>Visited: Add new marking
+                    Worker1->>Worker1: Calculate enabled transitions
+                    Worker1->>Tree: Add new child nodes
+                    Worker1->>+Queue: Enqueue new subnet tasks
+                else Duplicate marking
+                    Worker1->>Tree: Remove duplicate node
+                end
+            end
+            
+            Worker1->>Worker1: Process batched tasks
+        end
+    and
+        loop Until no more tasks
+            Worker2->>Queue: Poll for task
+            Queue-->>Worker2: Return FiringTask
+            
+            Worker2->>Tree: Get parent node
+            Tree-->>Worker2: Return Node
+            
+            Worker2->>Worker2: Fire transition in subnet
+            
+            Worker2->>Tree: Update child node's subnet marking
+            Worker2->>Worker2: Decrement completion counter
+            
+            alt Subnet processing complete
+                Worker2->>Visited: Check if marking exists
+                
+                alt New marking
+                    Worker2->>Visited: Add new marking
+                    Worker2->>Worker2: Calculate enabled transitions
+                    Worker2->>Tree: Add new child nodes
+                    Worker2->>+Queue: Enqueue new subnet tasks
+                else Duplicate marking
+                    Worker2->>Tree: Remove duplicate node
+                end
+            end
+            
+            Worker2->>Worker2: Process batched tasks
+        end
+    end
+    
+    Note over Worker1, Worker2: Workers detect empty queue
+    Worker1-->>-Pool: Worker finished
+    Worker2-->>-Pool: Worker finished
+    
+    Pool-->>-Main: All workers completed
+    Main->>Tree: Get final reachability tree
+    
+    Note over Main, Tree: Analysis complete
