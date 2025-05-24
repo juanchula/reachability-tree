@@ -5,7 +5,7 @@ import sys
 
 # Helper to build the net structure
 
-def generate_petri_net(branches, branches_len, tail_length):
+def generate_petri_net(branches, branches_len, tail_length, omegas=False):
     # Place and transition indices
     # p0: initial place, t0: initial transition, t4: join, t5, t6: tail transitions, etc.
     # We'll follow the structure of net_1.json
@@ -100,7 +100,7 @@ def generate_petri_net(branches, branches_len, tail_length):
     for i, branch_places in enumerate(branch_place_indices):
         I_minus[branch_places[-1]][t4_idx] = 1
     # t4 produces first tail place
-    I_plus[tail_places[0]][t4_idx] = 1
+    I_plus[tail_places[0]][t4_idx] = 2 if omegas else 1
     
     # Tail transitions
     for i, t in enumerate(tail_trans_indices):
@@ -141,6 +141,7 @@ def main():
     parser.add_argument('--branches-len', type=str, required=True, help='Comma-separated lengths of each branch')
     parser.add_argument('--tail-length', type=int, required=True, help='Length of the tail')
     parser.add_argument('--output', type=str, default=None, help='Output file (default: stdout)')
+    parser.add_argument('--omegas', action='store_true', help='Join transition produces 2 tokens instead of 1')
     args = parser.parse_args()
 
     branches_len = [int(x) for x in args.branches_len.split(',')]
@@ -148,7 +149,7 @@ def main():
         print('Error: --branches-len must have as many elements as --branches', file=sys.stderr)
         sys.exit(1)
 
-    net = generate_petri_net(args.branches, branches_len, args.tail_length)
+    net = generate_petri_net(args.branches, branches_len, args.tail_length, omegas=args.omegas)
     if args.output:
         with open(args.output, 'w') as f:
             json.dump(net, f, indent=2)
