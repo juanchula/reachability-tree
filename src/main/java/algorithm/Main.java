@@ -61,6 +61,24 @@ public class Main {
             ReachabilityAnalyzer analyzer = new ReachabilityAnalyzer(petriNet, nThreads);
             analyzer.analyze();
 
+            // Test for repeated markings in the reachability tree
+            Map<String, Node> reachabilityTree = analyzer.getReachabilityTree();
+            Set<String> seenMarkings = new HashSet<>();
+            Set<String> repeatedMarkings = new HashSet<>();
+            for (Map.Entry<String, Node> entry : reachabilityTree.entrySet()) {
+                Node node = entry.getValue();
+                int[] marking = node.getFinalGlobalMarking() != null ? node.getFinalGlobalMarking() : node.buildGlobalMarking(petriNet);
+                String markingStr = Arrays.toString(marking);
+                if (!seenMarkings.add(markingStr)) {
+                    repeatedMarkings.add(markingStr);
+                }
+            }
+            if (!repeatedMarkings.isEmpty()) {
+                logger.warn("Repeated markings found: {}", repeatedMarkings);
+            } else {
+                logger.info("No repeated markings found in the reachability tree.");
+            }
+
             // End time
             long endTime = System.nanoTime();
 

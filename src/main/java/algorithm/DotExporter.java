@@ -33,7 +33,7 @@ public class DotExporter {
                 Node node = entry.getValue();
 
                 // Obtener el marcado global como etiqueta
-                int[] globalMarking = node.buildGlobalMarking(petriNet);
+                int[] globalMarking = node.getFinalGlobalMarking() != null ? node.getFinalGlobalMarking() : node.buildGlobalMarking(petriNet);
                 String markingLabel = arrayToString(globalMarking);
 
                 // Escapar caracteres especiales en el ID
@@ -85,7 +85,11 @@ public class DotExporter {
     private static String arrayToString(int[] array) {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < array.length; i++) {
-            sb.append(array[i]);
+            if (array[i] == -1) {
+                sb.append("ω");
+            } else {
+                sb.append(array[i]);
+            }
             if (i < array.length - 1) {
                 sb.append(", ");
             }
