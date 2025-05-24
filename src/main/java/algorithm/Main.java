@@ -21,6 +21,9 @@ import java.util.Arrays;
 public class Main {
     private static final Logger logger = LogManager.getLogger(Main.class);
 
+    public static boolean DEBUG = false;
+    public static String DEBUG_MARKING_ID = null;
+
     public static void main(String[] args) {
         String inputFile = null;
         String outputFile = null;
@@ -41,6 +44,11 @@ public class Main {
                 }
             } else if ("--output".equals(args[i]) && i + 1 < args.length) {
                 outputFile = args[i + 1];
+                i++;
+            } else if ("--debug".equals(args[i])) {
+                DEBUG = true;
+            } else if ("--markingid".equals(args[i]) && i + 1 < args.length) {
+                DEBUG_MARKING_ID = args[i + 1];
                 i++;
             }
         }

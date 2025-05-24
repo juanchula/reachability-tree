@@ -214,6 +214,13 @@ class ReachabilityAnalyzer {
             int localTransIndex = subnet.getLocalTransIndex(transIndex);
             int[] newSubnetMarking = subnet.fireTransition(localTransIndex, subnetMarking);
 
+            // Ensure omega propagation: if parent subnet marking has omega, child must too
+            for (int i = 0; i < subnetMarking.length; i++) {
+                if (subnetMarking[i] == -1) {
+                    newSubnetMarking[i] = -1;
+                }
+            }
+
             // Obtener el nodo hijo
             String childMarkingId = task.getChildMarkingId();
             Node childNode = reachabilityTree.get(childMarkingId);
@@ -229,6 +236,41 @@ class ReachabilityAnalyzer {
             if (remaining == 0) {
                 // Si el contador llegó a 0, construir el marcado global
                 int[] globalMarking = childNode.buildGlobalMarking(petriNet);
+
+                // --- OMEGA DETECTION AND PROPAGATION ---
+                // Recorre la cadena de ancestros para detectar condiciones omega
+                String ancestorId = parentMarkingId;
+                boolean[] omegaPlaces = new boolean[globalMarking.length];
+                while (ancestorId != null && reachabilityTree.containsKey(ancestorId)) {
+                    Node ancestorNode = reachabilityTree.get(ancestorId);
+                    int[] ancestorMarking = ancestorNode.buildGlobalMarking(petriNet);
+                    boolean[] omegas = Node.getOmegaPlaces(ancestorMarking, globalMarking, ancestorId);
+                    for (int i = 0; i < omegaPlaces.length; i++) {
+                        omegaPlaces[i] = omegaPlaces[i] || omegas[i];
+                    }
+                    // Move to previous ancestor in the chain
+                    int idx = ancestorId.lastIndexOf("_t");
+                    if (idx > 0) {
+                        ancestorId = ancestorId.substring(0, idx);
+                    } else {
+                        ancestorId = null;
+                    }
+                }
+                boolean hasOmega = false;
+                for (boolean b : omegaPlaces) {
+                    if (b) { hasOmega = true; break; }
+                }
+                if (hasOmega) {
+                    globalMarking = Node.setOmegas(globalMarking, omegaPlaces);
+                }
+                childNode.setFinalGlobalMarking(globalMarking);
+                // Propagate omegas to all subnet markings
+                for (Subnet s : petriNet.getSubnets()) {
+                    int[] updatedSubnetMarking = s.extractSubnetMarking(globalMarking);
+                    childNode.setSubnetMarking(s.getId(), updatedSubnetMarking);
+                }
+                // --- END OMEGA DETECTION ---
+
                 String serializedMarking = serializeMarking(globalMarking);
 
                 // Verificar si ya se visitó este marcado (operación atómica)

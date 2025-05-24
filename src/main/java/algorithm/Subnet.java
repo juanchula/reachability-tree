@@ -104,8 +104,12 @@ class Subnet {
         int[] newSubnetMarking = Arrays.copyOf(subnetMarking, subnetMarking.length);
 
         for (int i = 0; i < placeIndices.length; i++) {
-            newSubnetMarking[i] -= subnetIMinus[i][localTransIndex];
-            newSubnetMarking[i] += subnetIPlus[i][localTransIndex];
+            if (subnetMarking[i] == -1) {
+                newSubnetMarking[i] = -1; // Omega stays omega
+            } else {
+                newSubnetMarking[i] -= subnetIMinus[i][localTransIndex];
+                newSubnetMarking[i] += subnetIPlus[i][localTransIndex];
+            }
         }
 
         return newSubnetMarking;

@@ -55,6 +55,7 @@ class PetriNet {
      */
     public boolean isTransitionEnabled(int transIndex, int[] marking) {
         for (int placeIndex = 0; placeIndex < marking.length; placeIndex++) {
+            if (marking[placeIndex] == -1) continue; // omega always satisfies
             if (iMinus[placeIndex][transIndex] > marking[placeIndex]) {
                 return false;
             }
