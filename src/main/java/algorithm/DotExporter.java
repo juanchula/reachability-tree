@@ -85,7 +85,7 @@ public class DotExporter {
     private static String arrayToString(int[] array) {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < array.length; i++) {
-            if (array[i] == -1) {
+            if (array[i] == -1 || array[i] == Integer.MAX_VALUE) {
                 sb.append("ω");
             } else {
                 sb.append(array[i]);

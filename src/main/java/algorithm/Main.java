@@ -28,6 +28,7 @@ public class Main {
         String inputFile = null;
         String outputFile = null;
         int nThreads = Runtime.getRuntime().availableProcessors();
+        boolean useOmega = false;
 
         // Procesar argumentos
         for (int i = 0; i < args.length; i++) {
@@ -50,6 +51,8 @@ public class Main {
             } else if ("--markingid".equals(args[i]) && i + 1 < args.length) {
                 DEBUG_MARKING_ID = args[i + 1];
                 i++;
+            } else if ("--omega".equals(args[i])) {
+                useOmega = true;
             }
         }
 
@@ -66,26 +69,30 @@ public class Main {
             long startTime = System.nanoTime();
 
             // Crear y ejecutar el analizador de alcanzabilidad
-            ReachabilityAnalyzer analyzer = new ReachabilityAnalyzer(petriNet, nThreads);
+            ReachabilityAnalyzer analyzer = new ReachabilityAnalyzer(petriNet, nThreads, useOmega);
             analyzer.analyze();
+            
+            if (useOmega) {
+                logger.info("Análisis completado con soporte para marcas omega (ω)");
+            }
 
-            // Test for repeated markings in the reachability tree
-            Map<String, Node> reachabilityTree = analyzer.getReachabilityTree();
-            Set<String> seenMarkings = new HashSet<>();
-            Set<String> repeatedMarkings = new HashSet<>();
-            for (Map.Entry<String, Node> entry : reachabilityTree.entrySet()) {
-                Node node = entry.getValue();
-                int[] marking = node.getFinalGlobalMarking() != null ? node.getFinalGlobalMarking() : node.buildGlobalMarking(petriNet);
-                String markingStr = Arrays.toString(marking);
-                if (!seenMarkings.add(markingStr)) {
-                    repeatedMarkings.add(markingStr);
-                }
-            }
-            if (!repeatedMarkings.isEmpty()) {
-                logger.warn("Repeated markings found: {}", repeatedMarkings);
-            } else {
-                logger.info("No repeated markings found in the reachability tree.");
-            }
+//            // Test for repeated markings in the reachability tree
+//            Map<String, Node> reachabilityTree = analyzer.getReachabilityTree();
+//            Set<String> seenMarkings = new HashSet<>();
+//            Set<String> repeatedMarkings = new HashSet<>();
+//            for (Map.Entry<String, Node> entry : reachabilityTree.entrySet()) {
+//                Node node = entry.getValue();
+//                int[] marking = node.getFinalGlobalMarking() != null ? node.getFinalGlobalMarking() : node.buildGlobalMarking(petriNet);
+//                String markingStr = Arrays.toString(marking);
+//                if (!seenMarkings.add(markingStr)) {
+//                    repeatedMarkings.add(markingStr);
+//                }
+//            }
+//            if (!repeatedMarkings.isEmpty()) {
+//                logger.warn("Repeated markings found: {}", repeatedMarkings);
+//            } else {
+//                logger.info("No repeated markings found in the reachability tree.");
+//            }
 
             // End time
             long endTime = System.nanoTime();
