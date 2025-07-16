@@ -13,8 +13,8 @@ import java.util.Arrays;
 class ReachabilityAnalyzer {
     private static final Logger logger = LogManager.getLogger(ReachabilityAnalyzer.class);
 
-    // Constante para representar omega (infinito)
-    public static final int OMEGA = Integer.MAX_VALUE;
+    // Constante para representar omega (infinito) - usando -1 como en el algoritmo de la tesis
+    public static final int OMEGA = -1;
 
     private final PetriNet petriNet;
     private final int numThreads;
@@ -23,15 +23,16 @@ class ReachabilityAnalyzer {
     // Recursos compartidos optimizados
     private final ConcurrentLinkedQueue<FiringTask> firingQueue;
     private final ConcurrentHashMap<String, Node> reachabilityTree;
-    private final ConcurrentHashMap<String, Boolean> visitedMarkings; // Cambio de Set a ConcurrentHashMap
+    private final ConcurrentHashMap<Long, Boolean> visitedMarkingsHash; // Usar Long hash en lugar de String
     private final AtomicInteger activeWorkers;
     private final AtomicInteger queuedTasks;
 
-    // Para trabajo por lotes
-    private static final int BATCH_SIZE = 64;
+    // Para trabajo por lotes - optimizado
+    private static final int BATCH_SIZE = 128; // Aumentar tamaño de lote
+    private static final int MAX_IDLE_TIME_MS = 25; // Reducir tiempo de espera
 
-    // Lista de marcados conocidos para regla omega
-    private final List<int[]> knownMarkings;
+    // Lista de marcados conocidos para regla omega - optimizada
+    private final ConcurrentHashMap<Long, int[]> knownMarkingsMap;
 
     public ReachabilityAnalyzer(PetriNet petriNet, int numThreads) {
         this(petriNet, numThreads, false);
@@ -45,10 +46,10 @@ class ReachabilityAnalyzer {
 
         this.firingQueue = new ConcurrentLinkedQueue<>();
         this.reachabilityTree = new ConcurrentHashMap<>(1024, 0.75f, numThreads);
-        this.visitedMarkings = new ConcurrentHashMap<>(1024, 0.75f, numThreads);
+        this.visitedMarkingsHash = new ConcurrentHashMap<>(1024, 0.75f, numThreads);
         this.activeWorkers = new AtomicInteger(0);
         this.queuedTasks = new AtomicInteger(0);
-        this.knownMarkings = useOmega ? new ArrayList<>() : null;
+        this.knownMarkingsMap = useOmega ? new ConcurrentHashMap<>() : null;
     }
 
     /**
@@ -68,12 +69,12 @@ class ReachabilityAnalyzer {
         String serializedInitialMarking = serializeMarking(initialMarking);
 
         // Registrar el marcado inicial
-        visitedMarkings.put(serializedInitialMarking, Boolean.TRUE);
+        visitedMarkingsHash.put(fastHashMarking(initialMarking), Boolean.TRUE);
         
         // Agregar a marcados conocidos si usamos omega
         if (useOmega) {
-            synchronized (knownMarkings) {
-                knownMarkings.add(Arrays.copyOf(initialMarking, initialMarking.length));
+            synchronized (knownMarkingsMap) {
+                knownMarkingsMap.put(fastHashMarking(initialMarking), Arrays.copyOf(initialMarking, initialMarking.length));
             }
         }
 
@@ -127,7 +128,7 @@ class ReachabilityAnalyzer {
         // Monitor más eficiente
         ScheduledExecutorService monitorService = Executors.newSingleThreadScheduledExecutor();
         monitorService.scheduleAtFixedRate(() -> {
-            String omegaInfo = useOmega ? String.format(", Marcados conocidos: %d", knownMarkings.size()) : "";
+            String omegaInfo = useOmega ? String.format(", Marcados conocidos: %d", knownMarkingsMap.size()) : "";
             logger.info("States: {}, Active workers: {}, Queued tasks: {}{}",
                     reachabilityTree.size(), activeWorkers.get(), queuedTasks.get(), omegaInfo);
         }, 1, 5, TimeUnit.SECONDS);
@@ -160,14 +161,7 @@ class ReachabilityAnalyzer {
         int[][] iMinus = petriNet.getIMinus();
         
         for (int t = 0; t < iMinus[0].length; t++) {
-            boolean enabled = true;
-            for (int i = 0; i < marking.length; i++) {
-                if (marking[i] != OMEGA && marking[i] < iMinus[i][t]) {
-                    enabled = false;
-                    break;
-                }
-            }
-            if (enabled) {
+            if (TransitionUtils.isEnabled(marking, t, iMinus)) {
                 enabledTransitions.add(t);
             }
         }
@@ -175,58 +169,34 @@ class ReachabilityAnalyzer {
         return enabledTransitions;
     }
 
-    /**
-     * Aplica la regla omega a un marcado.
-     */
-    private int[] applyOmegaRule(int[] newMarking) {
-        if (!useOmega || knownMarkings == null) {
-            return newMarking;
-        }
 
-        int[] updatedMarking = Arrays.copyOf(newMarking, newMarking.length);
+    
+    /**
+     * Obtiene la lista de ancestros de un nodo dado.
+     */
+    private List<Node> getAncestors(String markingId) {
+        List<Node> ancestors = new ArrayList<>();
+        String currentId = markingId;
         
-        synchronized (knownMarkings) {
-            for (int[] knownMarking : knownMarkings) {
-                if (isDominated(updatedMarking, knownMarking)) {
-                    // Aplicar regla omega
-                    for (int i = 0; i < updatedMarking.length; i++) {
-                        if (knownMarking[i] == OMEGA) {
-                            updatedMarking[i] = OMEGA;
-                        } else if (knownMarking[i] != OMEGA && 
-                                  (updatedMarking[i] == OMEGA || updatedMarking[i] > knownMarking[i])) {
-                            updatedMarking[i] = OMEGA;
-                        }
-                    }
-                }
+        while (currentId != null && reachabilityTree.containsKey(currentId)) {
+            Node ancestorNode = reachabilityTree.get(currentId);
+            if (ancestorNode.getFinalGlobalMarking() != null) {
+                ancestors.add(ancestorNode);
             }
-        }
-        
-        return updatedMarking;
-    }
-
-    /**
-     * Verifica si newMarking está dominado por knownMarking según las reglas omega.
-     */
-    private boolean isDominated(int[] newMarking, int[] knownMarking) {
-        boolean hasStrictlyGreater = false;
-        
-        for (int i = 0; i < newMarking.length; i++) {
-            if (knownMarking[i] == OMEGA) {
-                if (newMarking[i] != OMEGA) {
-                    return false; // No está dominado
-                }
+            
+            // Obtener el ID del padre
+            int idx = currentId.lastIndexOf("_t");
+            if (idx > 0) {
+                currentId = currentId.substring(0, idx);
             } else {
-                if (newMarking[i] != OMEGA && newMarking[i] < knownMarking[i]) {
-                    return false; // No está dominado
-                }
-                if (newMarking[i] == OMEGA || newMarking[i] > knownMarking[i]) {
-                    hasStrictlyGreater = true;
-                }
+                currentId = null;
             }
         }
         
-        return hasStrictlyGreater;
+        return ancestors;
     }
+
+
 
     /**
      * Obtiene el tamaño del árbol de alcanzabilidad.
@@ -236,23 +206,22 @@ class ReachabilityAnalyzer {
     }
 
     /**
-     * Serializa un marcado para su uso en visitedMarkings.
+     * Serializa un marcado para su uso en visitedMarkings usando hash eficiente.
      */
     private String serializeMarking(int[] marking) {
-        // Versión más eficiente para serializar arrays
-        StringBuilder sb = new StringBuilder(marking.length * 4);
-        sb.append('[');
-        for (int i = 0; i < marking.length; i++) {
-            if (i > 0)
-                sb.append(',');
-            if (marking[i] == OMEGA) {
-                sb.append("ω");
-            } else {
-                sb.append(marking[i]);
-            }
+        // Usar hash code más eficiente en lugar de StringBuilder
+        return Integer.toString(Arrays.hashCode(marking));
+    }
+
+    /**
+     * Serialización alternativa más rápida para marcados con omega.
+     */
+    private long fastHashMarking(int[] marking) {
+        long hash = 1;
+        for (int value : marking) {
+            hash = 31 * hash + (value == OMEGA ? OMEGA : value);
         }
-        sb.append(']');
-        return sb.toString();
+        return hash;
     }
 
     /**
@@ -276,7 +245,7 @@ class ReachabilityAnalyzer {
                                 break;
                             }
                         }
-                        Thread.sleep(10); // Espera breve antes de reintentar
+                        Thread.sleep(MAX_IDLE_TIME_MS); // Espera breve antes de reintentar
                         continue;
                     }
 
@@ -330,8 +299,8 @@ class ReachabilityAnalyzer {
 
             // Ensure omega propagation: if parent subnet marking has omega, child must too
             for (int i = 0; i < subnetMarking.length; i++) {
-                if (subnetMarking[i] == -1) {
-                    newSubnetMarking[i] = -1;
+                if (subnetMarking[i] == OMEGA) {
+                    newSubnetMarking[i] = OMEGA;
                 }
             }
 
@@ -352,15 +321,45 @@ class ReachabilityAnalyzer {
                 int[] globalMarking = childNode.buildGlobalMarking(petriNet);
 
                 // --- OMEGA DETECTION AND PROPAGATION ---
-                if (useOmega) {
-                    // Aplicar regla omega al marcado global
-                    globalMarking = applyOmegaRule(globalMarking);
-                    
-                    // Agregar el nuevo marcado a la lista de marcados conocidos
-                    synchronized (knownMarkings) {
-                        knownMarkings.add(Arrays.copyOf(globalMarking, globalMarking.length));
-                    }
-                } else {
+                // TEMPORALMENTE DESHABILITADO para debugging
+                // if (useOmega) {
+                //     // Obtener ancestros del nodo actual
+                //     List<Node> ancestors = getAncestors(parentMarkingId);
+                //     
+                //     logger.debug("Aplicando omega detection para nodo {} con {} ancestros", childMarkingId, ancestors.size());
+                //     
+                //     // Solo aplicar detección de omega si hay suficientes ancestros para análisis
+                //     // El algoritmo de la tesis requiere al menos 3 ancestros para detectar patrones
+                //     if (ancestors.size() >= 3) {
+                //         // Aplicar algoritmo de la tesis para detección de omega
+                //         OmegaDetector.applyOmega(
+                //             globalMarking,
+                //             ancestors,
+                //             transIndex,
+                //             1, // Mínimo de disparos por defecto
+                //             petriNet.getIMinus(),
+                //             petriNet.getIPlus()
+                //         );
+                //     } else {
+                //         logger.debug("Saltando detección de omega - insuficientes ancestros ({})", ancestors.size());
+                //     }
+                //     
+                //     // Verificar si se aplicó omega
+                //     boolean hasOmega = false;
+                //     for (int val : globalMarking) {
+                //         if (val == OMEGA) {
+                //             hasOmega = true;
+                //             break;
+                //         }
+                //     }
+                //     if (hasOmega) {
+                //         logger.info("Omega detectado en nodo {}: {}", childMarkingId, Arrays.toString(globalMarking));
+                //     }
+                //     
+                //     // Agregar el nuevo marcado a la lista de marcados conocidos
+                //     long markingHash = fastHashMarking(globalMarking);
+                //     knownMarkingsMap.putIfAbsent(markingHash, Arrays.copyOf(globalMarking, globalMarking.length));
+                // } else {
                     // Usar detección omega original (si está implementada en Node)
                     String ancestorId = parentMarkingId;
                     boolean[] omegaPlaces = new boolean[globalMarking.length];
@@ -379,14 +378,14 @@ class ReachabilityAnalyzer {
                             ancestorId = null;
                         }
                     }
-                    boolean hasOmega = false;
+                    boolean hasOmegaOriginal = false;
                     for (boolean b : omegaPlaces) {
-                        if (b) { hasOmega = true; break; }
+                        if (b) { hasOmegaOriginal = true; break; }
                     }
-                    if (hasOmega) {
+                    if (hasOmegaOriginal) {
                         globalMarking = Node.setOmegas(globalMarking, omegaPlaces);
                     }
-                }
+                // }
                 
                 childNode.setFinalGlobalMarking(globalMarking);
                 
@@ -400,38 +399,54 @@ class ReachabilityAnalyzer {
                 String serializedMarking = serializeMarking(globalMarking);
 
                 // Verificar si ya se visitó este marcado (operación atómica)
-                if (visitedMarkings.putIfAbsent(serializedMarking, Boolean.TRUE) != null) {
+                if (visitedMarkingsHash.putIfAbsent(fastHashMarking(globalMarking), Boolean.TRUE) != null) {
                     // Si ya existe, eliminar el nodo hijo
                     reachabilityTree.remove(childMarkingId);
                 } else {
-                    // Obtener transiciones habilitadas en el nuevo marcado
-                    List<Integer> enabledTransitions = getEnabledTransitionsWithOmega(globalMarking);
-
-                    // Pre-calcular los submarcados para reducir cálculos repetidos
-                    Map<Integer, int[]> precomputedSubnetMarkings = new HashMap<>();
-                    for (Subnet s : petriNet.getSubnets()) {
-                        precomputedSubnetMarkings.put(s.getId(), s.extractSubnetMarking(globalMarking));
+                    // *** PRUNE: Si el marcado tiene omega, NO continuar explorando ***
+                    boolean hasOmega = false;
+                    for (int val : globalMarking) {
+                        if (val == OMEGA) {
+                            hasOmega = true;
+                            break;
+                        }
                     }
+                    
+                    if (hasOmega) {
+                        // PRUNE: No continuar explorando desde marcados omega
+                        logger.debug("Aplicando PRUNE en nodo {} con marcado omega", childMarkingId);
+                        // No agregar más tareas al queue - el nodo omega actúa como absorbente
+                    } else {
+                        // Solo continuar explorando si NO tiene omega
+                        // Obtener transiciones habilitadas en el nuevo marcado
+                        List<Integer> enabledTransitions = getEnabledTransitionsWithOmega(globalMarking);
 
-                    // Procesar transiciones habilitadas
-                    for (int newTransIndex : enabledTransitions) {
-                        List<Subnet> involvedSubnets = petriNet.getSubnetsContainingTransition(newTransIndex);
+                        // Pre-calcular los submarcados para reducir cálculos repetidos
+                        Map<Integer, int[]> precomputedSubnetMarkings = new HashMap<>();
+                        for (Subnet s : petriNet.getSubnets()) {
+                            precomputedSubnetMarkings.put(s.getId(), s.extractSubnetMarking(globalMarking));
+                        }
 
-                        // Crear el nodo para el nuevo marcado
-                        String newChildMarkingId = childMarkingId + "_t" + newTransIndex;
+                        // Procesar transiciones habilitadas
+                        for (int newTransIndex : enabledTransitions) {
+                            List<Subnet> involvedSubnets = petriNet.getSubnetsContainingTransition(newTransIndex);
 
-                        // Usar una copia del mapa precomputado
-                        Map<Integer, int[]> newChildSubnetMarkings = new HashMap<>(precomputedSubnetMarkings);
+                            // Crear el nodo para el nuevo marcado
+                            String newChildMarkingId = childMarkingId + "_t" + newTransIndex;
 
-                        Node newChildNode = new Node(newChildMarkingId, newChildSubnetMarkings,
-                                involvedSubnets.size());
-                        reachabilityTree.put(newChildMarkingId, newChildNode);
+                            // Usar una copia del mapa precomputado
+                            Map<Integer, int[]> newChildSubnetMarkings = new HashMap<>(precomputedSubnetMarkings);
 
-                        // Crear y encolar las tareas de disparo
-                        for (Subnet s : involvedSubnets) {
-                            FiringTask newTask = new FiringTask(childMarkingId, newTransIndex, s);
-                            firingQueue.add(newTask);
-                            queuedTasks.incrementAndGet();
+                            Node newChildNode = new Node(newChildMarkingId, newChildSubnetMarkings,
+                                    involvedSubnets.size());
+                            reachabilityTree.put(newChildMarkingId, newChildNode);
+
+                            // Crear y encolar las tareas de disparo
+                            for (Subnet s : involvedSubnets) {
+                                FiringTask newTask = new FiringTask(childMarkingId, newTransIndex, s);
+                                firingQueue.add(newTask);
+                                queuedTasks.incrementAndGet();
+                            }
                         }
                     }
                 }

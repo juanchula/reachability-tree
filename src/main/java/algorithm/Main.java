@@ -29,6 +29,9 @@ public class Main {
         String outputFile = null;
         int nThreads = Runtime.getRuntime().availableProcessors();
         boolean useOmega = false;
+        boolean useOmegaStandalone = false;
+        boolean useOmegaOptimized = false;
+        boolean useOmegaUltraOptimized = false;
 
         // Procesar argumentos
         for (int i = 0; i < args.length; i++) {
@@ -53,65 +56,87 @@ public class Main {
                 i++;
             } else if ("--omega".equals(args[i])) {
                 useOmega = true;
+            } else if ("--omega-standalone".equals(args[i])) {
+                useOmegaStandalone = true;
+            } else if ("--omega-optimized".equals(args[i])) {
+                useOmegaOptimized = true;
+            } else if ("--omega-ultra".equals(args[i])) {
+                useOmegaUltraOptimized = true;
             }
         }
 
         if (inputFile == null) {
             logger.error("Input file is required. Use --input <filename>");
+            logger.info("Available options:");
+            logger.info("  --input <file>     : Input JSON file");
+            logger.info("  --output <file>    : Output DOT file (optional)");
+            logger.info("  --nthreads <n>     : Number of threads (default: CPU cores)");
+            logger.info("  --omega            : Enable omega marking support (integrated)");
+            logger.info("  --omega-standalone : Use standalone omega analyzer (Python-based)");
+            logger.info("  --omega-optimized  : Use optimized omega analyzer (distributed detection)");
+            logger.info("  --omega-ultra      : Use ULTRA-OPTIMIZED analyzer (all optimizations)");
+            logger.info("  --debug            : Enable debug mode");
+            logger.info("  --markingid <id>   : Debug specific marking ID");
             System.exit(1);
         }
 
         try {
-            // Cargar la red de Petri desde el archivo JSON
-            PetriNet petriNet = PetriNet.fromJson(inputFile);
-
             // Start time
             long startTime = System.nanoTime();
+            long endTime;
+            double millis;
 
-            // Crear y ejecutar el analizador de alcanzabilidad
-            ReachabilityAnalyzer analyzer = new ReachabilityAnalyzer(petriNet, nThreads, useOmega);
-            analyzer.analyze();
-            
-            if (useOmega) {
-                logger.info("Análisis completado con soporte para marcas omega (ω)");
-            }
+            if (useOmegaStandalone || useOmegaOptimized || useOmegaUltraOptimized) {
+                // Usar el analizador omega (standalone, optimizado o ultra-optimizado)
+                List<OmegaReachabilityAnalyzer.ReachabilityNode> nodes = 
+                    OmegaReachabilityAnalyzer.buildReachabilityTree(inputFile, nThreads);
+                
+                endTime = System.nanoTime();
+                millis = (endTime - startTime) / 1_000_000.0;
+                
+                System.out.println("Time taken: " + millis + " ms");
+                System.out.println("Total states: " + nodes.size());
+                
+                if (useOmegaUltraOptimized) {
+                    logger.info("🚀 Análisis completado con OmegaReachabilityAnalyzer ULTRA-OPTIMIZADO (todas las optimizaciones)");
+                } else if (useOmegaOptimized) {
+                    logger.info("Análisis completado con OmegaReachabilityAnalyzer OPTIMIZADO (detección distribuida)");
+                } else {
+                    logger.info("Análisis completado con OmegaReachabilityAnalyzer standalone");
+                }
+                
+                // Exportar a DOT si se especificó un archivo de salida
+                if (outputFile != null) {
+                    OmegaReachabilityAnalyzer.exportToDot(nodes, outputFile);
+                    logger.info("Reachability tree exported to DOT file: {}", outputFile);
+                }
+                
+            } else {
+                // Usar el analizador original con soporte omega integrado
+                PetriNet petriNet = PetriNet.fromJson(inputFile);
+                
+                // Crear y ejecutar el analizador de alcanzabilidad
+                ReachabilityAnalyzer analyzer = new ReachabilityAnalyzer(petriNet, nThreads, useOmega);
+                analyzer.analyze();
+                
+                if (useOmega) {
+                    logger.info("Análisis completado con soporte para marcas omega (ω)");
+                }
+                
+                endTime = System.nanoTime();
+                millis = (endTime - startTime) / 1_000_000.0;
+                
+                System.out.println("Time taken: " + millis + " ms");
+                
+                // Informar el resultado
+                logger.info("Analysis completed. Total states in reachability tree: {}",
+                        analyzer.getReachabilityTreeSize());
 
-//            // Test for repeated markings in the reachability tree
-//            Map<String, Node> reachabilityTree = analyzer.getReachabilityTree();
-//            Set<String> seenMarkings = new HashSet<>();
-//            Set<String> repeatedMarkings = new HashSet<>();
-//            for (Map.Entry<String, Node> entry : reachabilityTree.entrySet()) {
-//                Node node = entry.getValue();
-//                int[] marking = node.getFinalGlobalMarking() != null ? node.getFinalGlobalMarking() : node.buildGlobalMarking(petriNet);
-//                String markingStr = Arrays.toString(marking);
-//                if (!seenMarkings.add(markingStr)) {
-//                    repeatedMarkings.add(markingStr);
-//                }
-//            }
-//            if (!repeatedMarkings.isEmpty()) {
-//                logger.warn("Repeated markings found: {}", repeatedMarkings);
-//            } else {
-//                logger.info("No repeated markings found in the reachability tree.");
-//            }
-
-            // End time
-            long endTime = System.nanoTime();
-
-            // Duration in nanoseconds
-            long duration = endTime - startTime;
-            // Convert to milliseconds (optional)
-            double millis = duration / 1_000_000.0;
-
-            System.out.println("Time taken: " + millis + " ms");
-
-            // Informar el resultado
-            logger.info("Analysis completed. Total states in reachability tree: {}",
-                    analyzer.getReachabilityTreeSize());
-
-            // Exportar a DOT si se especificó un archivo de salida
-            if (outputFile != null) {
-                DotExporter.exportToDot(analyzer.getReachabilityTree(), petriNet, outputFile);
-                logger.info("Reachability tree exported to DOT file: {}", outputFile);
+                // Exportar a DOT si se especificó un archivo de salida
+                if (outputFile != null) {
+                    DotExporter.exportToDot(analyzer.getReachabilityTree(), petriNet, outputFile);
+                    logger.info("Reachability tree exported to DOT file: {}", outputFile);
+                }
             }
 
         } catch (IOException e) {

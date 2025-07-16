@@ -25,6 +25,7 @@ class Node {
         this.markingId = markingId;
         this.subnetMarkings = subnetMarkings;
         this.completionCounter = new AtomicInteger(completionCount);
+        this.finalGlobalMarking = null; // Inicializar como null
     }
 
     public String getMarkingId() {
@@ -68,7 +69,7 @@ class Node {
         int[] result = Arrays.copyOf(marking, marking.length);
         for (int i = 0; i < result.length; i++) {
             if (omegaPlaces[i]) {
-                result[i] = -1;
+                result[i] = -1; // Usar -1 como constante para omega
             }
         }
         return result;
@@ -140,7 +141,7 @@ class Node {
         int[] result = Arrays.copyOf(marking, marking.length);
         for (int i = 0; i < result.length; i++) {
             if (omegaPlaces[i]) {
-                result[i] = -1;
+                result[i] = -1; // Usar -1 como constante para omega
             }
         }
         return result;

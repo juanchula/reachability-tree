@@ -86,6 +86,30 @@ class PetriNet {
     }
 
     /**
+     * Obtiene una subred por su ID.
+     */
+    public Subnet getSubnetById(int subnetId) {
+        return subnets.stream()
+                .filter(subnet -> subnet.getId() == subnetId)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Obtiene el número de lugares en la red de Petri.
+     */
+    public int getNumPlaces() {
+        return initialMarking.length;
+    }
+
+    /**
+     * Obtiene el número de transiciones en la red de Petri.
+     */
+    public int getNumTransitions() {
+        return iMinus[0].length;
+    }
+
+    /**
      * Carga una red de Petri desde un archivo JSON.
      */
     public static PetriNet fromJson(String filePath) throws IOException {
