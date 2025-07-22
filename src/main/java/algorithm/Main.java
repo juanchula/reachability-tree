@@ -8,8 +8,8 @@ import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-        import java.util.concurrent.*;
-        import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
@@ -29,9 +29,6 @@ public class Main {
         String outputFile = null;
         int nThreads = Runtime.getRuntime().availableProcessors();
         boolean useOmega = false;
-        boolean useOmegaStandalone = false;
-        boolean useOmegaOptimized = false;
-        boolean useOmegaUltraOptimized = false;
 
         // Procesar argumentos
         for (int i = 0; i < args.length; i++) {
@@ -56,12 +53,6 @@ public class Main {
                 i++;
             } else if ("--omega".equals(args[i])) {
                 useOmega = true;
-            } else if ("--omega-standalone".equals(args[i])) {
-                useOmegaStandalone = true;
-            } else if ("--omega-optimized".equals(args[i])) {
-                useOmegaOptimized = true;
-            } else if ("--omega-ultra".equals(args[i])) {
-                useOmegaUltraOptimized = true;
             }
         }
 
@@ -72,9 +63,6 @@ public class Main {
             logger.info("  --output <file>    : Output DOT file (optional)");
             logger.info("  --nthreads <n>     : Number of threads (default: CPU cores)");
             logger.info("  --omega            : Enable omega marking support (integrated)");
-            logger.info("  --omega-standalone : Use standalone omega analyzer (Python-based)");
-            logger.info("  --omega-optimized  : Use optimized omega analyzer (distributed detection)");
-            logger.info("  --omega-ultra      : Use ULTRA-OPTIMIZED analyzer (all optimizations)");
             logger.info("  --debug            : Enable debug mode");
             logger.info("  --markingid <id>   : Debug specific marking ID");
             System.exit(1);
@@ -86,57 +74,30 @@ public class Main {
             long endTime;
             double millis;
 
-            if (useOmegaStandalone || useOmegaOptimized || useOmegaUltraOptimized) {
-                // Usar el analizador omega (standalone, optimizado o ultra-optimizado)
-                List<OmegaReachabilityAnalyzer.ReachabilityNode> nodes = 
-                    OmegaReachabilityAnalyzer.buildReachabilityTree(inputFile, nThreads);
-                
-                endTime = System.nanoTime();
-                millis = (endTime - startTime) / 1_000_000.0;
-                
-                System.out.println("Time taken: " + millis + " ms");
-                System.out.println("Total states: " + nodes.size());
-                
-                if (useOmegaUltraOptimized) {
-                    logger.info("🚀 Análisis completado con OmegaReachabilityAnalyzer ULTRA-OPTIMIZADO (todas las optimizaciones)");
-                } else if (useOmegaOptimized) {
-                    logger.info("Análisis completado con OmegaReachabilityAnalyzer OPTIMIZADO (detección distribuida)");
-                } else {
-                    logger.info("Análisis completado con OmegaReachabilityAnalyzer standalone");
-                }
-                
-                // Exportar a DOT si se especificó un archivo de salida
-                if (outputFile != null) {
-                    OmegaReachabilityAnalyzer.exportToDot(nodes, outputFile);
-                    logger.info("Reachability tree exported to DOT file: {}", outputFile);
-                }
-                
-            } else {
-                // Usar el analizador original con soporte omega integrado
-                PetriNet petriNet = PetriNet.fromJson(inputFile);
-                
-                // Crear y ejecutar el analizador de alcanzabilidad
-                ReachabilityAnalyzer analyzer = new ReachabilityAnalyzer(petriNet, nThreads, useOmega);
-                analyzer.analyze();
-                
-                if (useOmega) {
-                    logger.info("Análisis completado con soporte para marcas omega (ω)");
-                }
-                
-                endTime = System.nanoTime();
-                millis = (endTime - startTime) / 1_000_000.0;
-                
-                System.out.println("Time taken: " + millis + " ms");
-                
-                // Informar el resultado
-                logger.info("Analysis completed. Total states in reachability tree: {}",
-                        analyzer.getReachabilityTreeSize());
+            // Usar el analizador con soporte omega integrado
+            PetriNet petriNet = PetriNet.fromJson(inputFile);
+            
+            // Crear y ejecutar el analizador de alcanzabilidad
+            ReachabilityAnalyzer analyzer = new ReachabilityAnalyzer(petriNet, nThreads, useOmega);
+            analyzer.analyze();
+            
+            if (useOmega) {
+                logger.info("Análisis completado con soporte para marcas omega (ω)");
+            }
+            
+            endTime = System.nanoTime();
+            millis = (endTime - startTime) / 1_000_000.0;
+            
+            System.out.println("Time taken: " + millis + " ms");
+            
+            // Informar el resultado
+            logger.info("Analysis completed. Total states in reachability tree: {}",
+                    analyzer.getReachabilityTreeSize());
 
-                // Exportar a DOT si se especificó un archivo de salida
-                if (outputFile != null) {
-                    DotExporter.exportToDot(analyzer.getReachabilityTree(), petriNet, outputFile);
-                    logger.info("Reachability tree exported to DOT file: {}", outputFile);
-                }
+            // Exportar a DOT si se especificó un archivo de salida
+            if (outputFile != null) {
+                DotExporter.exportToDot(analyzer.getReachabilityTree(), petriNet, outputFile);
+                logger.info("Reachability tree exported to DOT file: {}", outputFile);
             }
 
         } catch (IOException e) {

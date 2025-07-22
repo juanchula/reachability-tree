@@ -319,47 +319,6 @@ class ReachabilityAnalyzer {
             if (remaining == 0) {
                 // Si el contador llegó a 0, construir el marcado global
                 int[] globalMarking = childNode.buildGlobalMarking(petriNet);
-
-                // --- OMEGA DETECTION AND PROPAGATION ---
-                // TEMPORALMENTE DESHABILITADO para debugging
-                // if (useOmega) {
-                //     // Obtener ancestros del nodo actual
-                //     List<Node> ancestors = getAncestors(parentMarkingId);
-                //     
-                //     logger.debug("Aplicando omega detection para nodo {} con {} ancestros", childMarkingId, ancestors.size());
-                //     
-                //     // Solo aplicar detección de omega si hay suficientes ancestros para análisis
-                //     // El algoritmo de la tesis requiere al menos 3 ancestros para detectar patrones
-                //     if (ancestors.size() >= 3) {
-                //         // Aplicar algoritmo de la tesis para detección de omega
-                //         OmegaDetector.applyOmega(
-                //             globalMarking,
-                //             ancestors,
-                //             transIndex,
-                //             1, // Mínimo de disparos por defecto
-                //             petriNet.getIMinus(),
-                //             petriNet.getIPlus()
-                //         );
-                //     } else {
-                //         logger.debug("Saltando detección de omega - insuficientes ancestros ({})", ancestors.size());
-                //     }
-                //     
-                //     // Verificar si se aplicó omega
-                //     boolean hasOmega = false;
-                //     for (int val : globalMarking) {
-                //         if (val == OMEGA) {
-                //             hasOmega = true;
-                //             break;
-                //         }
-                //     }
-                //     if (hasOmega) {
-                //         logger.info("Omega detectado en nodo {}: {}", childMarkingId, Arrays.toString(globalMarking));
-                //     }
-                //     
-                //     // Agregar el nuevo marcado a la lista de marcados conocidos
-                //     long markingHash = fastHashMarking(globalMarking);
-                //     knownMarkingsMap.putIfAbsent(markingHash, Arrays.copyOf(globalMarking, globalMarking.length));
-                // } else {
                     // Usar detección omega original (si está implementada en Node)
                     String ancestorId = parentMarkingId;
                     boolean[] omegaPlaces = new boolean[globalMarking.length];
