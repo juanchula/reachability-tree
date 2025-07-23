@@ -362,50 +362,35 @@ class ReachabilityAnalyzer {
                     // Si ya existe, eliminar el nodo hijo
                     reachabilityTree.remove(childMarkingId);
                 } else {
-                    // *** PRUNE: Si el marcado tiene omega, NO continuar explorando ***
-                    boolean hasOmega = false;
-                    for (int val : globalMarking) {
-                        if (val == OMEGA) {
-                            hasOmega = true;
-                            break;
-                        }
+                    // MEJORA: Continuar explorando incluso si hay omega, pero evitar ciclos
+                    // Obtener transiciones habilitadas en el nuevo marcado
+                    List<Integer> enabledTransitions = getEnabledTransitionsWithOmega(globalMarking);
+
+                    // Pre-calcular los submarcados para reducir cálculos repetidos
+                    Map<Integer, int[]> precomputedSubnetMarkings = new HashMap<>();
+                    for (Subnet s : petriNet.getSubnets()) {
+                        precomputedSubnetMarkings.put(s.getId(), s.extractSubnetMarking(globalMarking));
                     }
-                    
-                    if (hasOmega) {
-                        // PRUNE: No continuar explorando desde marcados omega
-                        logger.debug("Aplicando PRUNE en nodo {} con marcado omega", childMarkingId);
-                        // No agregar más tareas al queue - el nodo omega actúa como absorbente
-                    } else {
-                        // Solo continuar explorando si NO tiene omega
-                        // Obtener transiciones habilitadas en el nuevo marcado
-                        List<Integer> enabledTransitions = getEnabledTransitionsWithOmega(globalMarking);
 
-                        // Pre-calcular los submarcados para reducir cálculos repetidos
-                        Map<Integer, int[]> precomputedSubnetMarkings = new HashMap<>();
-                        for (Subnet s : petriNet.getSubnets()) {
-                            precomputedSubnetMarkings.put(s.getId(), s.extractSubnetMarking(globalMarking));
-                        }
+                    // Procesar transiciones habilitadas
+                    for (int newTransIndex : enabledTransitions) {
+                        List<Subnet> involvedSubnets = petriNet.getSubnetsContainingTransition(newTransIndex);
 
-                        // Procesar transiciones habilitadas
-                        for (int newTransIndex : enabledTransitions) {
-                            List<Subnet> involvedSubnets = petriNet.getSubnetsContainingTransition(newTransIndex);
+                        // Crear el nodo para el nuevo marcado
+                        String newChildMarkingId = childMarkingId + "_t" + newTransIndex;
 
-                            // Crear el nodo para el nuevo marcado
-                            String newChildMarkingId = childMarkingId + "_t" + newTransIndex;
+                        // Usar una copia del mapa precomputado
+                        Map<Integer, int[]> newChildSubnetMarkings = new HashMap<>(precomputedSubnetMarkings);
 
-                            // Usar una copia del mapa precomputado
-                            Map<Integer, int[]> newChildSubnetMarkings = new HashMap<>(precomputedSubnetMarkings);
+                        Node newChildNode = new Node(newChildMarkingId, newChildSubnetMarkings,
+                                involvedSubnets.size());
+                        reachabilityTree.put(newChildMarkingId, newChildNode);
 
-                            Node newChildNode = new Node(newChildMarkingId, newChildSubnetMarkings,
-                                    involvedSubnets.size());
-                            reachabilityTree.put(newChildMarkingId, newChildNode);
-
-                            // Crear y encolar las tareas de disparo
-                            for (Subnet s : involvedSubnets) {
-                                FiringTask newTask = new FiringTask(childMarkingId, newTransIndex, s);
-                                firingQueue.add(newTask);
-                                queuedTasks.incrementAndGet();
-                            }
+                        // Crear y encolar las tareas de disparo
+                        for (Subnet s : involvedSubnets) {
+                            FiringTask newTask = new FiringTask(childMarkingId, newTransIndex, s);
+                            firingQueue.add(newTask);
+                            queuedTasks.incrementAndGet();
                         }
                     }
                 }
