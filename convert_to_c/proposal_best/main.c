@@ -325,12 +325,17 @@ static program_config_t parse_arguments(int argc, char *argv[]) {
 static void print_performance_stats(const perf_stats_t *stats, 
                                    const program_config_t *config,
                                    size_t tree_size) {
-    double elapsed_time = stats->end_time - stats->start_time;
-    double states_per_second = elapsed_time > 0 ? atomic_load(&stats->states_explored) / elapsed_time : 0;
+    double elapsed_time_ms = stats->end_time_ms - stats->start_time_ms;
+    double elapsed_time_s = elapsed_time_ms / 1000.0;
+    double states_per_second = elapsed_time_s > 0 ? atomic_load(&stats->states_explored) / elapsed_time_s : 0;
     
     printf("\n");
     printf("=== ESTADÍSTICAS DE RENDIMIENTO ===\n");
-    printf("Tiempo total: %.3f segundos\n", elapsed_time);
+    if (elapsed_time_ms < 1000.0) {
+        printf("Tiempo total: %.1f ms\n", elapsed_time_ms);
+    } else {
+        printf("Tiempo total: %.3f segundos (%.1f ms)\n", elapsed_time_s, elapsed_time_ms);
+    }
     printf("Estados explorados: %zu\n", atomic_load(&stats->states_explored));
     printf("Estados en árbol final: %zu\n", tree_size);
     printf("Estados por segundo: %.2f\n", states_per_second);
@@ -359,8 +364,8 @@ static void print_performance_stats(const perf_stats_t *stats,
     }
     
     // Cálculo de speedup estimado
-    double estimated_sequential_time = elapsed_time * config->num_threads * 0.8; // Factor conservador
-    double speedup = estimated_sequential_time / elapsed_time;
+    double estimated_sequential_time = elapsed_time_s * config->num_threads * 0.8; // Factor conservador
+    double speedup = estimated_sequential_time / elapsed_time_s;
     printf("  - Speedup estimado: %.2fx\n", speedup);
     printf("  - Eficiencia paralela: %.1f%%\n", (speedup / config->num_threads) * 100.0);
 }
@@ -397,7 +402,7 @@ int main(int argc, char *argv[]) {
     setup_signal_handlers();
     
     // Registrar tiempo de inicio
-    g_stats.start_time = get_time_seconds();
+    g_stats.start_time_ms = get_time_ms();
     
     // Parsear argumentos
     program_config_t config = parse_arguments(argc, argv);
@@ -478,7 +483,7 @@ int main(int argc, char *argv[]) {
     result = parallel_analyzer_analyze(analyzer);
     printf("\n");  // Nueva línea después del progreso
     
-    g_stats.end_time = get_time_seconds();
+    g_stats.end_time_ms = get_time_ms();
     
     // Verificar si fue interrumpido
     if (interrupted) {
@@ -499,7 +504,12 @@ int main(int argc, char *argv[]) {
     
     printf("✅ Análisis completado exitosamente\n");
     LOG_INFO("Estados totales en el árbol de alcanzabilidad: %zu", total_states);
-    LOG_INFO("Tiempo total: %.3f segundos", g_stats.end_time - g_stats.start_time);
+    double elapsed_ms = g_stats.end_time_ms - g_stats.start_time_ms;
+    if (elapsed_ms < 1000.0) {
+        LOG_INFO("Tiempo total: %.1f ms", elapsed_ms);
+    } else {
+        LOG_INFO("Tiempo total: %.3f segundos", elapsed_ms / 1000.0);
+    }
     
     if (config.use_omega) {
         LOG_INFO("Análisis completado con soporte para marcas omega (ω)");
@@ -533,8 +543,8 @@ int main(int argc, char *argv[]) {
     }
     
     // Mensaje final de rendimiento
-    double elapsed = g_stats.end_time - g_stats.start_time;
-    double states_per_sec = elapsed > 0 ? total_states / elapsed : 0;
+    double elapsed_s = (g_stats.end_time_ms - g_stats.start_time_ms) / 1000.0;
+    double states_per_sec = elapsed_s > 0 ? total_states / elapsed_s : 0;
     printf("\n🎯 Rendimiento: %.0f estados/segundo con %d hilo%s\n", 
            states_per_sec, config.num_threads, config.num_threads == 1 ? "" : "s");
     

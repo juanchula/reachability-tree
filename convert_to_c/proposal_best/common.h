@@ -160,8 +160,8 @@ typedef struct perf_stats {
     atomic_size_t tasks_processed;
     atomic_size_t cache_hits;
     atomic_size_t cache_misses;
-    double start_time;
-    double end_time;
+    double start_time_ms;
+    double end_time_ms;
 } perf_stats_t;
 
 // ============================================================================
