@@ -652,3 +652,84 @@ petri_error_t petri_net_validate(const petri_net_t *net) {
     LOG_DEBUG("Petri net validation successful");
     return PETRI_SUCCESS;
 }
+
+// ============================================================================
+// FUNCIONES DE DISPARO CON SEMÁNTICA OMEGA
+// ============================================================================
+
+/**
+ * Verifica si algún pre-lugar de una transición tiene marca omega.
+ */
+static inline bool has_omega_pre(const petri_net_t *net, int t, const int *m) {
+    for (int p = 0; p < net->num_places; p++) {
+        int w = net->i_minus[p][t];
+        if (w > 0 && m[p] == OMEGA) return true;
+    }
+    return false;
+}
+
+bool petri_net_fire_transition_omega(const petri_net_t *net,
+                                     int t,
+                                     const int *m,
+                                     int *out) {
+    if (!net || !m || !out) return false;
+    if (!VALID_TRANS_INDEX(net, t)) return false;
+
+    // Copia base del marcado de entrada
+    for (int p = 0; p < net->num_places; p++) {
+        out[p] = m[p];
+    }
+
+    // Verificar si la transición está habilitada bajo semántica ω
+    // (cualquier pre-lugar ω cuenta como "suficiente", el resto debe tener m[p] >= w)
+    for (int p = 0; p < net->num_places; p++) {
+        int w = net->i_minus[p][t];
+        if (w == 0) continue;
+        if (m[p] == OMEGA) continue;  // Omega siempre es suficiente
+        if (m[p] < w) return false;   // No hay suficientes tokens
+    }
+
+    const bool pre_has_omega = has_omega_pre(net, t, m);
+
+    // Fase 1: Consumir tokens (∞ - w = ∞, finito - w = finito - w)
+    for (int p = 0; p < net->num_places; p++) {
+        int w = net->i_minus[p][t];
+        if (w == 0) continue;
+        
+        if (m[p] == OMEGA) {
+            out[p] = OMEGA;  // ∞ - w = ∞
+        } else {
+            out[p] = m[p] - w;  // finito - w
+        }
+    }
+
+    // Fase 2: Producir tokens 
+    // Si algún pre-lugar es ω -> todos los post con w>0 pasan a ω
+    for (int p = 0; p < net->num_places; p++) {
+        int w = net->i_plus[p][t];
+        if (w == 0) continue;
+
+        if (out[p] == OMEGA) {
+            // Ya es ω, se queda ω
+            continue;
+        }
+        
+        if (pre_has_omega) {
+            // Si hay omega en pre-lugares, propagar omega a post-lugares
+            out[p] = OMEGA;
+        } else {
+            // Sumar normalmente: finito + w
+            out[p] = out[p] + w;
+        }
+    }
+
+    // Fase 3: Cargar ω a los lugares no afectados que ya eran ω en la entrada
+    // (esto asegura que ω se preserva en lugares que no participan en la transición)
+    for (int p = 0; p < net->num_places; p++) {
+        if (m[p] == OMEGA) {
+            out[p] = OMEGA;
+        }
+    }
+
+    return true;
+}

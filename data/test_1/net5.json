@@ -1,0 +1,31 @@
+{
+  "M0": [1, 0, 0, 0, 0, 0],
+  "I_minus": [
+    [1, 0, 0, 0, 0, 0],  // t0: P0 -> P1 + P2
+    [0, 1, 0, 0, 0, 0],  // t1: P1 -> P3
+    [0, 0, 1, 0, 0, 0],  // t2: P2 -> P4
+    [0, 0, 0, 1, 0, 0],  // t3: P3 -> P5
+    [0, 0, 0, 0, 1, 0],  // t4: P4 -> P5
+    [0, 0, 0, 0, 0, 1]   // t5: P5 -> P0
+  ],
+  "I_plus": [
+    [0, 1, 1, 0, 0, 0],  // t0: produces one token at P1 and one at P2
+    [0, 0, 0, 1, 0, 0],  // t1
+    [0, 0, 0, 0, 1, 0],  // t2
+    [0, 0, 0, 0, 0, 1],  // t3
+    [0, 0, 0, 0, 0, 1],  // t4
+    [1, 0, 0, 0, 0, 0]   // t5: closes cycle
+  ],
+  "subnet_definitions": [
+    {
+      "id": 0,
+      "place_indices": [0, 1, 2],
+      "trans_indices": [0, 1, 2, 5]   // t5 included to update P0; t1,t2 local
+    },
+    {
+      "id": 1,
+      "place_indices": [3, 4, 5],
+      "trans_indices": [1, 2, 3, 4, 5] // t1,t2 produce P3,P4; t3,t4 local; t5 included to update P5
+    }
+  ]
+}

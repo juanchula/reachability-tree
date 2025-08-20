@@ -1,0 +1,36 @@
+{
+  "M0": [1, 0, 0, 0, 0, 0],
+  "I_minus": [
+    [1, 0, 0, 0, 0, 0],   // t0: P0 -> P1
+    [0, 1, 0, 0, 0, 0],   // t1: P1 -> P2
+    [0, 0, 1, 0, 0, 0],   // t2: P2 -> P3
+    [0, 0, 0, 1, 0, 0],   // t3: P3 -> P4
+    [0, 0, 0, 0, 1, 0],   // t4: P4 -> P5
+    [0, 0, 0, 0, 0, 1]    // t5: P5 -> P0
+  ],
+  "I_plus": [
+    [0, 1, 0, 0, 0, 0],   // t0
+    [0, 0, 1, 0, 0, 0],   // t1
+    [0, 0, 0, 1, 0, 0],   // t2
+    [0, 0, 0, 0, 1, 0],   // t3
+    [0, 0, 0, 0, 0, 1],   // t4
+    [1, 0, 0, 0, 0, 0]    // t5
+  ],
+  "subnet_definitions": [
+    {
+      "id": 0,
+      "place_indices": [0, 1],
+      "trans_indices": [0, 5]      // local transitions for P0/P1; t5 replicated here to update P0
+    },
+    {
+      "id": 1,
+      "place_indices": [2, 3],
+      "trans_indices": [1, 2]      // local transitions for P2/P3
+    },
+    {
+      "id": 2,
+      "place_indices": [4, 5],
+      "trans_indices": [3, 4, 5]   // t5 replicated here to update P5
+    }
+  ]
+}

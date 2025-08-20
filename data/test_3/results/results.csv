@@ -1,0 +1,13 @@
+Network,Algorithm,Threads,States,Omega_Detections,Time_ms,Throughput_states_per_sec,Status,DOT_File
+net_medium_bounded_divided,java,5,4100,0,237.045417,17296,SUCCESS,net_medium_bounded_divided_java_t5.dot
+net_medium_bounded_divided,java,10,4100,0,223.357833,18356,SUCCESS,NO_DOT
+net_medium_bounded_divided,java,20,4100,0,243.058625,16868,SUCCESS,NO_DOT
+net_medium_bounded_divided,c,5,500,8481,2.5,5,SUCCESS,net_medium_bounded_divided_c_t5.dot
+net_medium_bounded_divided,c,10,500,8481,2.3,10,SUCCESS,net_medium_bounded_divided_c_t10.dot
+net_medium_bounded_divided,c,20,500,8481,2.5,20,SUCCESS,net_medium_bounded_divided_c_t20.dot
+net_medium_unbounded_divided,java,5,45072,704580,2395.005792,18819,SUCCESS,NO_DOT
+net_medium_unbounded_divided,java,10,45072,704580,2453.049167,18373,SUCCESS,NO_DOT
+net_medium_unbounded_divided,java,20,45072,704580,2287.051083,19707,SUCCESS,NO_DOT
+net_medium_unbounded_divided,c,5,500,8481,2.8,5,SUCCESS,net_medium_unbounded_divided_c_t5.dot
+net_medium_unbounded_divided,c,10,500,8481,2.5,10,SUCCESS,net_medium_unbounded_divided_c_t10.dot
+net_medium_unbounded_divided,c,20,500,8481,2.3,20,SUCCESS,net_medium_unbounded_divided_c_t20.dot

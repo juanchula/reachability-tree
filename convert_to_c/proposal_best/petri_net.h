@@ -126,6 +126,22 @@ subnet_t** petri_net_get_subnets_containing_transition(const petri_net_t *net, i
  */
 bool petri_net_fire_transition(const petri_net_t *net, int trans_idx, const int *marking, int *new_marking);
 
+/**
+ * Dispara una transición con semántica omega completa.
+ * Maneja correctamente la aritmética ω: ∞ - c = ∞, ∞ + c = ∞
+ * Si algún pre-lugar es ω, todos los post-lugares con arco > 0 quedan ω.
+ * 
+ * @param net Red de Petri
+ * @param transition_index Índice de la transición a disparar
+ * @param marking_in Marcado de entrada
+ * @param marking_out [out] Marcado de salida (debe tener espacio para num_places)
+ * @return true si el disparo fue exitoso, false si la transición no estaba habilitada
+ */
+bool petri_net_fire_transition_omega(const petri_net_t *net,
+                                     int transition_index,
+                                     const int *marking_in,
+                                     int *marking_out);
+
 // ============================================================================
 // FUNCIONES DE SUBRED
 // ============================================================================

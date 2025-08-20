@@ -1,0 +1,48 @@
+{
+  "M0": [1, 0, 1, 0, 0, 0, 0, 0],
+  "I_minus": [
+    // Loop on P0/P1
+    [1, 0, 0, 0, 0, 0, 0, 0],  // t0: P0 -> P1
+    [0, 1, 0, 0, 0, 0, 0, 0],  // t1: P1 -> P0 + 2*P1
+    // Loop on P2/P3
+    [0, 0, 1, 0, 0, 0, 0, 0],  // t2: P2 -> P3
+    [0, 0, 0, 1, 0, 0, 0, 0],  // t3: P3 -> P2 + 2*P3
+    // Cross transitions
+    [0, 1, 0, 0, 0, 0, 0, 0],  // t4: P1 -> P4
+    [0, 0, 0, 1, 0, 0, 0, 0],  // t5: P3 -> P5
+    [0, 0, 0, 0, 1, 0, 0, 0],  // t6: P4 -> P6
+    [0, 0, 0, 0, 0, 1, 0, 0]   // t7: P5 -> P7
+  ],
+  "I_plus": [
+    [0, 1, 0, 0, 0, 0, 0, 0],  // t0
+    [1, 2, 0, 0, 0, 0, 0, 0],  // t1
+    [0, 0, 0, 1, 0, 0, 0, 0],  // t2
+    [0, 0, 1, 2, 0, 0, 0, 0],  // t3
+    [0, 0, 0, 0, 1, 0, 0, 0],  // t4
+    [0, 0, 0, 0, 0, 1, 0, 0],  // t5
+    [0, 0, 0, 0, 0, 0, 1, 0],  // t6
+    [0, 0, 0, 0, 0, 0, 0, 1]   // t7
+  ],
+  "subnet_definitions": [
+    {
+      "id": 0,
+      "place_indices": [0, 1, 4],
+      "trans_indices": [0, 1, 4, 6]   // include t6 to update P4
+    },
+    {
+      "id": 1,
+      "place_indices": [2, 3, 5],
+      "trans_indices": [2, 3, 5, 7]   // include t7 to update P5
+    },
+    {
+      "id": 2,
+      "place_indices": [4, 6],
+      "trans_indices": [6]            // local transitions for P4/P6
+    },
+    {
+      "id": 3,
+      "place_indices": [5, 7],
+      "trans_indices": [7]            // local transitions for P5/P7
+    }
+  ]
+}
