@@ -503,11 +503,14 @@ int main(int argc, char *argv[]) {
     size_t total_states = reachability_tree_size(tree);
     
     printf("✅ Análisis completado exitosamente\n");
+    printf("📊 Estados totales encontrados: %zu\n", total_states);
     LOG_INFO("Estados totales en el árbol de alcanzabilidad: %zu", total_states);
     double elapsed_ms = g_stats.end_time_ms - g_stats.start_time_ms;
     if (elapsed_ms < 1000.0) {
+        printf("⏱️  Tiempo total: %.1f ms\n", elapsed_ms);
         LOG_INFO("Tiempo total: %.1f ms", elapsed_ms);
     } else {
+        printf("⏱️  Tiempo total: %.3f segundos\n", elapsed_ms / 1000.0);
         LOG_INFO("Tiempo total: %.3f segundos", elapsed_ms / 1000.0);
     }
     

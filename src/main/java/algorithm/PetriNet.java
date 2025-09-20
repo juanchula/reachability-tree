@@ -146,8 +146,10 @@ class PetriNet {
         // Cargar las definiciones de subredes
         JsonNode subnetsNode = rootNode.get("subnet_definitions");
         List<Subnet> subnets = new ArrayList<>();
+        int subnetIndex = 0;
         for (JsonNode subnetNode : subnetsNode) {
-            int id = subnetNode.get("id").asInt();
+            // Usar ID del JSON si existe, sino generar automáticamente
+            int id = subnetNode.has("id") ? subnetNode.get("id").asInt() : subnetIndex++;
 
             // Cargar índices de lugares
             JsonNode placeIndicesNode = subnetNode.get("place_indices");
