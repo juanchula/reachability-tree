@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Raíz del repo (donde está este .sh)
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
 
-# Preferir venv local si existe
 if [ -x "${ROOT}/.venv/bin/python" ]; then
   PY="${ROOT}/.venv/bin/python"
 else
   PY="python3"
 fi
 
-# --- Parseo "passthru": quitar -L (límite) y division flags, conservar el resto para auto_gen.py ---
 OUTDIR="gen_nets"
 LIMIT=""
-DIVISION_MODE=""  # optimized, original, or empty (default)
+DIVISION_MODE=""
 PASSTHRU=()
 args=( "$@" )
 i=0
@@ -45,20 +42,16 @@ while [ $i -lt ${#args[@]} ]; do
   esac
 done
 
-# Sello para filtrar sólo lo recién generado
 STAMP="$(mktemp)"; trap 'rm -f "$STAMP"' EXIT
 touch "$STAMP"
 
-# --- 1) Generar con sólo las flags que auto_gen.py entiende ---
 "$PY" "${ROOT}/auto_gen.py" "${PASSTHRU[@]}"
 
-# OUTDIR absoluto
 case "$OUTDIR" in
   /*) ;;
   *) OUTDIR="$(cd -P -- "$OUTDIR" 2>/dev/null || cd -P -- "${PWD%/}/${OUTDIR#./}"; pwd)";;
 esac
 
-# --- 2) Procesar lo nuevo ---
 count=0
 find "$OUTDIR" -type f -name "net.pflow" -newer "$STAMP" -print0 \
 | while IFS= read -r -d '' PF; do
@@ -67,7 +60,6 @@ find "$OUTDIR" -type f -name "net.pflow" -newer "$STAMP" -print0 \
 
     "$PY" "${ROOT}/pflow_to_ndr.py" "$PF" -o "${DIR}/net.ndr"
 
-    # Build partition command with division mode
     PARTITION_CMD=("$PY" "${ROOT}/pflow_partition_s3pr.py" "$PF"
                    -o "${DIR}/net_dividida.json"
                    --dot "${DIR}/subnets.dot"
@@ -85,7 +77,6 @@ find "$OUTDIR" -type f -name "net.pflow" -newer "$STAMP" -print0 \
 
     "${PARTITION_CMD[@]}"
 
-    # Resolver petri_json_to_dot.py en ../ o en el mismo directorio
     DOTPY="${ROOT}/../utils/petri_json_to_dot.py"
     [ -f "$DOTPY" ] || DOTPY="${ROOT}/../utils/petri_json_to_dot.py"
     if [ -f "$DOTPY" ]; then

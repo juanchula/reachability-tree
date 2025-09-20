@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# pflow_partition_s3pr.py
-# Divide .pflow (Petrinator) en subredes: trenes + acoples (recursos compartidos/fork-join)
-# Mantiene el orden P1..Pn / T1..Tm para reproducibilidad.
+"""
+Divide .pflow (Petrinator) en subredes: trenes + acoples (recursos compartidos/fork-join)
+Mantiene el orden P1..Pn / T1..Tm para reproducibilidad.
+"""
 import xml.etree.ElementTree as ET
 import argparse, json, re, os, subprocess, tempfile
 from collections import defaultdict, deque
@@ -142,55 +143,36 @@ def to_dot_overview(subnets, path):
 def use_optimized_division(I_minus, I_plus, M0):
     """Call Java OptimizedSubnetDivider to create optimized subnets"""
     try:
-        # Create temporary file with network data
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-            temp_network = {
-                "M0": M0,
-                "I_minus": I_minus,
-                "I_plus": I_plus,
-                "subnet_definitions": []  # Will be replaced by optimizer
-            }
+            temp_network = {"M0": M0, "I_minus": I_minus, "I_plus": I_plus, "subnet_definitions": []}
             json.dump(temp_network, tmp, indent=2)
             temp_path = tmp.name
 
         try:
-            # Find project root (where pom.xml is)
             script_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = script_dir
-            for _ in range(5):  # Search up to 5 levels up
+            for _ in range(5):
                 if os.path.exists(os.path.join(project_root, 'pom.xml')):
                     break
                 project_root = os.path.dirname(project_root)
 
-            # Run Java OptimizedSubnetDivider
-            cmd = [
-                'mvn', 'exec:java',
-                '-Dexec.mainClass=algorithm.OptimizedSubnetDivider',
-                f'-Dexec.args={temp_path}',
-                '-q'  # Quiet mode
-            ]
-
+            cmd = ['mvn', 'exec:java', '-Dexec.mainClass=algorithm.OptimizedSubnetDivider', f'-Dexec.args={temp_path}', '-q']
             result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0:
-                # Read the optimized network back
                 with open(temp_path, 'r') as f:
                     optimized_network = json.load(f)
-
                 subnets = optimized_network.get('subnet_definitions', [])
                 print(f"✅ OptimizedSubnetDivider: {len(subnets)} subredes balanceadas")
                 return subnets
             else:
                 print(f"⚠️  Error ejecutando OptimizedSubnetDivider: {result.stderr}")
                 return None
-
         finally:
-            # Clean up temp file
             try:
                 os.unlink(temp_path)
             except:
                 pass
-
     except Exception as e:
         print(f"⚠️  Error usando OptimizedSubnetDivider: {e}")
         return None
@@ -208,18 +190,13 @@ def main():
 
     places,transitions,I_minus,I_plus,M0=parse_pflow(a.pflow)
 
-    # Choose division algorithm
     if a.optimized and not a.original:
-        # Use OptimizedSubnetDivider from Java
         print("🔧 Usando OptimizedSubnetDivider (división balanceada)")
         optimized_subnets = use_optimized_division(I_minus, I_plus, M0)
-
         if optimized_subnets is not None:
-            # Use optimized division
             subnets_data = optimized_subnets
             division_type = "optimizada"
         else:
-            # Fallback to original if optimization fails
             print("⚠️  Fallback a división original")
             centers,t_col=cluster_columns(transitions,a.bin)
             info,internal,shared=classify_places(I_minus,I_plus,t_col)
@@ -229,7 +206,6 @@ def main():
             subnets_data=[{"place_indices":s["place_indices"],"trans_indices":s["trans_indices"]} for s in subnets]
             division_type = "original (fallback)"
     else:
-        # Use original geographic clustering algorithm
         print("🔧 Usando división original (clustering geográfico)")
         centers,t_col=cluster_columns(transitions,a.bin)
         info,internal,shared=classify_places(I_minus,I_plus,t_col)
@@ -244,10 +220,8 @@ def main():
     out=a.out or (a.pflow.rsplit(".",1)[0]+".json")
     with open(out,"w",encoding="utf-8") as f: json.dump(bundle,f,indent=2,ensure_ascii=False)
 
-    # Create DOT visualization with original format for compatibility
     if a.dot:
-        if a.optimized and optimized_subnets is not None:
-            # For optimized subnets, create simplified subnet objects for visualization
+        if a.optimized and 'optimized_subnets' in locals() and optimized_subnets is not None:
             viz_subnets = [{"place_indices": s["place_indices"], "trans_indices": s["trans_indices"], "kind": "optimized"} for s in subnets_data]
         else:
             viz_subnets = subnets
