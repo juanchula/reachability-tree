@@ -12,9 +12,10 @@ else
   PY="python3"
 fi
 
-# --- Parseo "passthru": quitar -L (límite) y conservar el resto para auto_gen.py ---
+# --- Parseo "passthru": quitar -L (límite) y division flags, conservar el resto para auto_gen.py ---
 OUTDIR="gen_nets"
 LIMIT=""
+DIVISION_MODE=""  # optimized, original, or empty (default)
 PASSTHRU=()
 args=( "$@" )
 i=0
@@ -26,6 +27,10 @@ while [ $i -lt ${#args[@]} ]; do
       LIMIT="${args[$((i+1))]}"; i=$((i+2));;
     -L=*)
       LIMIT="${a#-L=}"; i=$((i+1));;
+    --optimized)
+      DIVISION_MODE="optimized"; i=$((i+1));;
+    --original)
+      DIVISION_MODE="original"; i=$((i+1));;
     -o)
       (( i+1 < ${#args[@]} )) || { echo "Falta valor para -o" >&2; exit 2; }
       OUTDIR="${args[$((i+1))]}"
@@ -62,10 +67,23 @@ find "$OUTDIR" -type f -name "net.pflow" -newer "$STAMP" -print0 \
 
     "$PY" "${ROOT}/pflow_to_ndr.py" "$PF" -o "${DIR}/net.ndr"
 
-    "$PY" "${ROOT}/pflow_partition_s3pr.py" "$PF" \
-      -o "${DIR}/net_dividida.json" \
-      --dot "${DIR}/subnets.dot" \
-      --bin 50 --min-train-places 2 --min-train-trans 2
+    # Build partition command with division mode
+    PARTITION_CMD=("$PY" "${ROOT}/pflow_partition_s3pr.py" "$PF"
+                   -o "${DIR}/net_dividida.json"
+                   --dot "${DIR}/subnets.dot"
+                   --bin 50 --min-train-places 2 --min-train-trans 2)
+
+    if [ "$DIVISION_MODE" = "optimized" ]; then
+        PARTITION_CMD+=(--optimized)
+        printf '[*] Usando división optimizada (OptimizedSubnetDivider)\n'
+    elif [ "$DIVISION_MODE" = "original" ]; then
+        PARTITION_CMD+=(--original)
+        printf '[*] Usando división original (clustering geográfico)\n'
+    else
+        printf '[*] Usando división por defecto (clustering geográfico)\n'
+    fi
+
+    "${PARTITION_CMD[@]}"
 
     # Resolver petri_json_to_dot.py en ../ o en el mismo directorio
     DOTPY="${ROOT}/../utils/petri_json_to_dot.py"
