@@ -4,6 +4,7 @@
 # Utiliza el generador S3PR para crear redes con parámetros incrementales
 
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colores para logging
 RED='\033[0;31m'
@@ -347,7 +348,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validar pipeline generator
-GENERATOR_SCRIPT="src/scripts/generator_s3pr/pipeline_gen_pflow_ndr_json.sh"
+GENERATOR_SCRIPT="$SCRIPT_DIR/src/scripts/generator_s3pr/pipeline_gen_pflow_ndr_json.sh"
 if [[ ! -f "$GENERATOR_SCRIPT" ]]; then
     log_error "No se encontró el generador: $GENERATOR_SCRIPT"
     exit 1
