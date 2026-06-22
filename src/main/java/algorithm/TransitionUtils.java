@@ -25,4 +25,33 @@ public final class TransitionUtils {
         }
         return true;
     }
-} 
+
+    /**
+     * Devuelve <code>true</code> si la transición <code>t</code> está habilitada en
+     * todos los marcados del lote. Útil para podar disparos cuya transición
+     * sensibilizada no es uniforme en un lote.
+     */
+    public static boolean isEnabledInAll(int[][] markings, int t, int[][] Iminus) {
+        if (markings == null) return false;
+        for (int[] m : markings) {
+            if (!isEnabled(m, t, Iminus)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Cuenta cuántos marcados del lote tienen la transición <code>t</code> habilitada.
+     */
+    public static int countEnabledIn(int[][] markings, int t, int[][] Iminus) {
+        if (markings == null) return 0;
+        int count = 0;
+        for (int[] m : markings) {
+            if (isEnabled(m, t, Iminus)) {
+                count++;
+            }
+        }
+        return count;
+    }
+}
