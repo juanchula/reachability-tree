@@ -47,12 +47,12 @@ import time; print(time.time_ns())
 PY
 )
 ELAPSED_MS=$(( (END_NS - START_NS) / 1000000 ))
-STATES=$(grep -Eo 'Total states in reachability tree: [0-9]+' "$OUT_DIR/run.log" | awk '{print $NF}' | tail -1)
+STATES=$(grep -Eo 'Total states in reachability tree: [0-9]+' "$OUT_DIR/run.log" | awk '{print $NF}' | tail -1 || true)
 
 {
   echo "# V3 reproducible run"
   echo
-  echo "- Fecha: $(date -Iseconds)"
+  echo "- Fecha: $(date '+%Y-%m-%dT%H:%M:%S%z')"
   echo "- Red: $NET_PATH"
   echo "- Threads: $THREADS"
   echo "- Tiempo_ms: $ELAPSED_MS"
@@ -61,7 +61,17 @@ STATES=$(grep -Eo 'Total states in reachability tree: [0-9]+' "$OUT_DIR/run.log"
 } > "$SUMMARY"
 
 if [[ "$WITH_GENERATION" == true ]]; then
-  "$ROOT_DIR/generate_s3pr_networks.sh" --sizes "micro" --count 1 --output "$OUT_DIR/generated_s3pr" > "$OUT_DIR/generation.log" 2>&1
+  if ! "$ROOT_DIR/generate_s3pr_networks.sh" --sizes "micro" --count 1 --output "$OUT_DIR/generated_s3pr" > "$OUT_DIR/generation.log" 2>&1; then
+    echo "- Generación: fallida; revisar generation.log y generation_report.md" >> "$SUMMARY"
+    cat "$SUMMARY"
+    exit 1
+  fi
+  if ! find "$OUT_DIR/generated_s3pr/micro_1" -type f -name net_dividida.json -size +0c -print -quit 2>/dev/null | grep -q . ||
+     ! find "$OUT_DIR/generated_s3pr/micro_1" -type f -name net.ndr -size +0c -print -quit 2>/dev/null | grep -q .; then
+    echo "- Generación: incompleta o fallida; revisar generation.log y generation_report.md" >> "$SUMMARY"
+    cat "$SUMMARY"
+    exit 1
+  fi
   echo "- Redes_generadas: $OUT_DIR/generated_s3pr" >> "$SUMMARY"
 fi
 

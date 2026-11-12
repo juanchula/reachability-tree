@@ -441,8 +441,9 @@ generate_network() {
         return 0
     fi
     
-    # Ejecutar generación con timeout
-    if timeout "${TIMEOUT}s" "$GENERATOR_SCRIPT" -n 1 -o "$network_dir" $config &>/dev/null; then
+    # Conservar el diagnóstico incluso cuando el generador falla o agota tiempo.
+    mkdir -p "$network_dir"
+    if timeout "${TIMEOUT}s" "$GENERATOR_SCRIPT" -n 1 -o "$network_dir" $config >"$network_dir/generator.log" 2>&1; then
         local gen_end=$(date +%s)
         local gen_time=$((gen_end - gen_start))
         
@@ -465,10 +466,13 @@ generate_network() {
             return 1
         fi
     else
+        local status=$?
         local gen_end=$(date +%s)
         local gen_time=$((gen_end - gen_start))
-        log_error "    ❌ Timeout o error en generación (${gen_time}s)"
-        echo "| $size | $index | ❌ Timeout | - | - | - | $gen_time |" >> "$report_file"
+        local reason="Error (exit $status)"
+        if [[ "$status" -eq 124 ]]; then reason="Timeout"; fi
+        log_error "    ❌ $reason (${gen_time}s); ver $network_dir/generator.log"
+        echo "| $size | $index | ❌ $reason | - | - | - | $gen_time |" >> "$report_file"
         return 1
     fi
 }
@@ -542,8 +546,10 @@ find "$OUTPUT_DIR" -name "net_dividida.json" -type f | sort | while read -r file
     echo "    $size_index ($places lugares)"
 done
 
-if [[ "$DRY_RUN" == "false" ]]; then
+if [[ "$DRY_RUN" == "false" && "$failed_generations" -eq 0 ]]; then
     echo
     log_success "🎯 Listo para benchmark! Ejecuta:"
     log_success "    ./benchmark_s3pr_algorithms.sh \"$OUTPUT_DIR\" \"[1,4,10]\" 300"
 fi
+
+if [[ "$failed_generations" -gt 0 ]]; then exit 1; fi
